@@ -24,6 +24,9 @@
 #include "cartographer_ros_msgs/StatusCode.h"
 #include "cartographer_ros_msgs/StatusResponse.h"
 
+#include "cartographer_ros/assets_writer.h"
+
+
 namespace cartographer_ros {
 namespace {
 
@@ -156,6 +159,7 @@ void MapBuilderBridge::RunFinalOptimization() {
   LOG(INFO) << "Running final trajectory optimization...";
   map_builder_->pose_graph()->RunFinalOptimization();
 }
+
 
 bool MapBuilderBridge::SerializeState(const std::string& filename) {
   cartographer::io::ProtoStreamWriter writer(filename);

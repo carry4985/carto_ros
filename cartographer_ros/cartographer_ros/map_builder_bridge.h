@@ -71,6 +71,7 @@ class MapBuilderBridge {
       const TrajectoryOptions& trajectory_options);
   void FinishTrajectory(int trajectory_id);
   void RunFinalOptimization();
+
   bool SerializeState(const std::string& filename);
 
   void HandleSubmapQuery(

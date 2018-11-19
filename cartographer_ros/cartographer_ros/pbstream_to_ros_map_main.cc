@@ -62,6 +62,10 @@ void Run(const std::string& pbstream_filename, const std::string& map_filestem,
               pose_graph.trajectory(id.trajectory_id)
                   .submap(id.submap_index)
                   .pose());
+
+//      ::cartographer::mapping::Submap2D submap2d(submap.submap_2d());
+//      local_pose = submap2d.local_pose();
+
       FillSubmapSlice(global_submap_pose, submap, &submap_slices[id]);
     }
   }

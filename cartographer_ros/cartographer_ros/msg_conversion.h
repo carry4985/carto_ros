@@ -57,6 +57,8 @@ std::tuple<::cartographer::sensor::PointCloudWithIntensities,
            ::cartographer::common::Time>
 ToPointCloudWithIntensities(const sensor_msgs::LaserScan& msg);
 
+::cartographer::sensor::PointCloud ToPointCloud(const sensor_msgs::LaserScan& msg);
+
 std::tuple<::cartographer::sensor::PointCloudWithIntensities,
            ::cartographer::common::Time>
 ToPointCloudWithIntensities(const sensor_msgs::MultiEchoLaserScan& msg);

@@ -48,6 +48,7 @@ void Run() {
   tf2_ros::Buffer tf_buffer{::ros::Duration(kTfBufferCacheTimeInSeconds)};
   tf2_ros::TransformListener tf(tf_buffer);
   NodeOptions node_options;
+
   TrajectoryOptions trajectory_options;
   std::tie(node_options, trajectory_options) =
       LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);

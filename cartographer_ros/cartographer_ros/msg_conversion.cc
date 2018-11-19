@@ -175,6 +175,33 @@ ToPointCloudWithIntensities(const sensor_msgs::LaserScan& msg) {
   return LaserScanToPointCloudWithIntensities(msg);
 }
 
+::cartographer::sensor::PointCloud ToPointCloud(const sensor_msgs::LaserScan& msg){
+  CHECK_GE(msg.range_min, 0.f);
+  CHECK_GE(msg.range_max, msg.range_min);
+  if (msg.angle_increment > 0.f) {
+    CHECK_GT(msg.angle_max, msg.angle_min);
+  } else {
+    CHECK_GT(msg.angle_min, msg.angle_max);
+  }
+  ::cartographer::sensor::PointCloud point_cloud;
+  float angle = msg.angle_min;
+  for (size_t i = 0; i < msg.ranges.size(); ++i) {
+    const auto& echoes = msg.ranges[i];
+    if (HasEcho(echoes)) {
+      const float first_echo = GetFirstEcho(echoes);
+      if (msg.range_min <= first_echo && first_echo <= msg.range_max) {
+        const Eigen::AngleAxisf rotation(angle, Eigen::Vector3f::UnitZ());
+        Eigen::Vector3f point;
+        point << rotation * (first_echo * Eigen::Vector3f::UnitX());
+        point_cloud.push_back(point);
+      }
+    }
+    angle += msg.angle_increment;
+  }
+
+  return point_cloud;
+}
+
 std::tuple<::cartographer::sensor::PointCloudWithIntensities,
            ::cartographer::common::Time>
 ToPointCloudWithIntensities(const sensor_msgs::MultiEchoLaserScan& msg) {

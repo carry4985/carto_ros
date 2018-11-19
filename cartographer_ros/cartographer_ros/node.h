@@ -71,6 +71,7 @@ class Node {
 
   // Runs final optimization. All trajectories have to be finished when calling.
   void RunFinalOptimization();
+  void SaveSubmapsPB(const std::string& outdir);
 
   // Starts the first trajectory with the default topics.
   void StartTrajectoryWithDefaultTopics(const TrajectoryOptions& options);
