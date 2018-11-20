@@ -25,11 +25,10 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include "node_constants.h"
 
-DEFINE_string(pbstream_filename, "",
-              "Filename of a pbstream to draw a map from.");
-DEFINE_string(cfg_dir, "cfg", "configure dir.");
-DEFINE_string(cfg_name, "cfg", "configure name.");
-DEFINE_double(resolution, 0.05, "Resolution of a grid cell in the drawn map.");
+DEFINE_string(pb_higher_res, "",
+              "Filename of a high resolution pbstream to load.");
+DEFINE_string(pb_lower_res, "",
+              "Filename of a lower resolution pbstream to load.");
 
 namespace cartographer_ros {
 namespace {
@@ -48,10 +47,7 @@ void trans_tf(const GlobalLocator::GlobalPose2D&pose,
     transform.transform.rotation.z = q.z();
     transform.transform.rotation.w = q.w();
 }
-void Run(const std::string& pbstream_filename) {
-  GlobalLocator locator;
-  locator.build_matchers_from_pbstream(pbstream_filename);
-
+void Run(const std::shared_ptr<GlobalLocator>& locator) {
   ::ros::NodeHandle nh;
   ::ros::Subscriber laser_scan_subscriber;
 
@@ -68,7 +64,7 @@ void Run(const std::string& pbstream_filename) {
               float timeuse;
               gettimeofday(&tpstart,NULL);
 
-              if(locator.match(msg, tmpRes)){
+              if(locator->match(msg, tmpRes)){
                   LOG(INFO)<<"Matched location is (<<"<<tmpRes.x<<","<<tmpRes.x<<","<<tmpRes.theta<<")";
                   kLocated = true;
                   msgToMatch = *msg;
@@ -112,10 +108,15 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  CHECK(!FLAGS_pbstream_filename.empty()) << "-pbstream_filename is missing.";
+  CHECK(!FLAGS_pb_higher_res.empty()) << "-pb_higher_res is missing.";
   ::ros::init(argc, argv, "cartographer_global_localization");
   ::ros::start();
-  ::cartographer_ros::Run(FLAGS_pbstream_filename);
-
+  std::shared_ptr<GlobalLocator> locator;
+  if(!FLAGS_pb_lower_res.empty()){
+      locator = std::make_shared<GlobalLocator>(FLAGS_pb_higher_res,FLAGS_pb_lower_res);
+  } else {
+    locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
+  }
+  ::cartographer_ros::Run(locator);
   ::ros::shutdown();
 }

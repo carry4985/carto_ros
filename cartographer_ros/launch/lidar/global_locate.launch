@@ -11,7 +11,7 @@
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
-  limitations under the License.
+  limitations under the License.-pb_lower_res $(arg pb_lower_res)
 -->
 
 <launch>
@@ -26,7 +26,8 @@
 
     <node name="cartographer_global_localization" pkg="cartographer_ros"
         type="cartographer_global_localization" args="
-             -pbstream_filename $(arg pbstream_filename)" />
+             -pb_higher_res $(arg pb_higher_res)
+             -pb_lower_res $(arg pb_lower_res)" />
     <remap from="scan" to="/scan" />
   </group>
 
