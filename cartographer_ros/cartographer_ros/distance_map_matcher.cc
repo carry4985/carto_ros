@@ -3,11 +3,12 @@
 #include <cmath>
 #include "glog/logging.h"
 
-DistanceMapMatcher::DistanceMapMatcher(std::string DistMapsPath,
+void DistanceMapMatcher::loadDistanceMapData(std::string DistMapsPath,
                                        std::string MinIdxListPath)
-        : DistMapsPath(DistMapsPath),
-          MinIdxListPath(MinIdxListPath)
+
 {
+    this->DistMapsPath=DistMapsPath,
+    this->MinIdxListPath=MinIdxListPath;
     std::ifstream fin(DistMapsPath.c_str());
     if(!fin)
         LOG(INFO) << "DistMapsFile does not exhist!!!";
@@ -128,34 +129,69 @@ DistanceMapMatcher::DistanceMapMatcher(std::string DistMapsPath,
     }
 }
 
+void DistanceMapMatcher::loadHistgramMapData(const std::string &hist_file_path){
+    std::ifstream ifs(hist_file_path);
+    if(!ifs){
+      LOG(ERROR)<<"open input hist file failed!";
+      return;
+    }
+    std::string line;
+    while(std::getline(ifs, line)){
+      if(line.empty()) break;
+      std::vector<std::string> feats;
+      splitString(line, feats, ",");
+      int r = atoi(feats[0].c_str());
+      int c = atoi(feats[1].c_str());
+      Histgram h(c,r,params::g_size_of_bin);
+      for(int i = 0; i < params::g_size_of_bin; i++){
+        const std::string&f =  feats[i+2];
+        h._hist[i] = atof(f.c_str());
+      }
+      _histgrams.push_back(h);
+    }
+}
+
 cv::Mat DistanceMapMatcher::getCandidates(const std::string &pgmpath,
                                           const sensor_msgs::LaserScan::ConstPtr &msg){
     cv::Mat map = cv::imread(pgmpath,1);
-    auto features = computeFeaturesForScan(msg);
-
-//    std::vector<MinMaxAlphaDist> res;
-//    bool ok = filterMinMaxAlphaDistMap(res,map,features[0],features[1],
-//                                      features[2],features[3],0.5,0.5,2);
-//    if(ok){
-//         return map;
-//    }
-//    else{
-//        return cv::Mat();
-//    }
+//    auto features = computeFeaturesForScan(msg);
+    auto features = computeHistForScan(msg);
     std::vector<PixelWithCoef> res;
-    getCoefVec(features, res);
+    for(auto x: features._hist){
+      LOG(INFO)<<x;
+    }
+    getCoefVecHist(features._hist, res);
     std::sort(res.begin(), res.end(), [](const PixelWithCoef& a,const PixelWithCoef& b){
         return a._coef > b._coef;
     });
-    for(int i = 0; i < res.size(); i++ ){
-        if(res[i]._coef>0.99){
-            LOG(INFO)<<i<<","<<res[i]._coef;
+
+    for(int i = 0; i < 20; i++ ){
+        if(1){//res[i]._coef>0.99
+            LOG(INFO)<<i<<","<< res[i]._coef;
             cv::circle(map, cv::Point(res[i]._col,res[i]._row),5,cv::Scalar(0,0,255));
+            LOG(INFO)<<res[i]._col*0.05-14.954245<<", "<<(395-res[i]._row)*0.05-18.284489;
         }else{
             break;
         }
     }
     return map;
+}
+
+std::vector<cv::Point2f> DistanceMapMatcher::getCandidates(const sensor_msgs::LaserScan::ConstPtr &msg,
+                                                           const int top_n){
+  auto features = computeHistForScan(msg);
+  std::vector<PixelWithCoef> res;
+
+  getCoefVecHist(features._hist, res);
+  std::sort(res.begin(), res.end(), [](const PixelWithCoef& a,const PixelWithCoef& b){
+      return a._coef > b._coef;
+  });
+
+  std::vector<cv::Point2f> candi_pts;
+  for(int i = 0; i < top_n; i++ ){
+    candi_pts.push_back(cv::Point2f(res[i]._col*0.05-14.954245,(395-res[i]._row)*0.05-18.284489));//todo
+  }
+  return candi_pts;
 }
 
 void DistanceMapMatcher::VisitandFilter(BinTree *bTree,float key,float tolerance)
@@ -217,17 +253,32 @@ std::vector<float> DistanceMapMatcher::computeFeaturesForScan(const sensor_msgs:
     return attr;
 }
 
-float DistanceMapMatcher::computeCoef(const std::vector<float>&vec1,
-                                      const std::vector<float>&vec2){
-    return (vec1[0]*vec2[0]+vec1[1]*vec2[1]+
-            vec1[2]*vec2[2]+vec1[3]*vec2[3]) * 1.0 /
-            (std::sqrt(vec1[0]*vec1[0]+vec1[1]*vec1[1]+
-            vec1[2]*vec1[2]+vec1[3]*vec1[3])
-            *std::sqrt(vec2[0]*vec2[0]+vec2[1]*vec2[1]+
-            vec2[2]*vec2[2]+vec2[3]*vec2[3]));
+Histgram DistanceMapMatcher::computeHistForScan(const sensor_msgs::LaserScan::ConstPtr &msg){
+  const float min_range = params::g_min_scan_range;
+  const float max_range = params::g_max_scan_range;
+  const int bin_size = params::g_size_of_bin;
+
+  int length = 360;
+  float rangeMax = msg->range_max;
+  float rangeMin = msg->range_min;
+
+  float minScan = 10000.;
+  float maxScan = 0.;
+  const float bin_step = (max_range - min_range) * 1.0 / bin_size;
+  Histgram hist(0,0,bin_size); //temp paras.
+  for(int i = 0; i < length; ++i){
+      float range_len= msg->ranges[i];
+      if(range_len != INFINITY && range_len < max_range && range_len > min_range){
+          int index = (range_len - min_range) / bin_step;
+          hist._hist[index]++;
+      }
+  }
+
+  return hist;
 }
 
-void DistanceMapMatcher::getCoefVec(const std::vector<float>&scanFeatureVec,
+
+void DistanceMapMatcher::getCoefVecDist(const std::vector<float>&scanFeatureVec,
                                     std::vector<PixelWithCoef>&coefVec){
     if(!coefVec.empty())coefVec.clear();
     std::vector<float> vec2(4),vec2Normed(4), scanFeatNormed;
@@ -242,9 +293,61 @@ void DistanceMapMatcher::getCoefVec(const std::vector<float>&scanFeatureVec,
         float target_variance=VectorMinMaxAlphaDist[idx].variance;
         vec2 = {target_mindist,target_maxdist,target_avgdist,target_variance};
         vec2Normed = normalize(vec2);
-        float coef = computeCoef(scanFeatNormed, vec2Normed);
+        float coef = computeCoef<float>(scanFeatNormed, vec2Normed);
         coefVec.push_back(PixelWithCoef(row,col,coef));
     }
+}
+
+void DistanceMapMatcher::getCoefVecHist(const std::vector<int>&scanFeatureVec,
+                                    std::vector<PixelWithCoef>&coefVec){
+    if(!coefVec.empty())coefVec.clear();
+
+    for (int idx=0; idx<_histgrams.size(); idx++){
+        int col=_histgrams[idx]._col;
+        int row=_histgrams[idx]._row;
+
+//        float coef = computeCoef<int>(scanFeatureVec, _histgrams[idx]._hist);
+        float coef = compareHist(scanFeatureVec, _histgrams[idx]._hist,CORREL);
+        coefVec.push_back(PixelWithCoef(row,col,coef));
+    }
+}
+
+float DistanceMapMatcher::compareHist(const std::vector<int> &hist1,
+                                      const std::vector<int> &hist2,
+                                      HIST_COMPARE_MODE mode){
+  if(hist1.size()!=hist2.size() || hist1.empty()) return 0.;
+  int size = hist1.size();
+  float avg1 = 0., avg2 = 0.;
+  for(int i = 0; i<size; i++){
+    avg1 += hist1[i];
+    avg2 += hist2[i];
+  }
+  avg1 /= size;
+  avg2 /= size;
+
+  if(mode==CORREL){
+    float s12 = 0., s11 = 0., s22 = 0.;
+    for(int i = 0; i < size; i++){
+      s12 += (hist1[i] - avg1)*(hist2[i] - avg2);
+      s11 += (hist1[i] - avg1)*(hist1[i] - avg1);
+      s22 += (hist2[i] - avg2)*(hist2[i] - avg2);
+    }
+    return s12 / std::sqrt(s11*s22);
+  }else if(mode==CHISQR){
+    float s = 0.;
+    for(int i = 0; i < size; i++){
+      s += (hist1[i]-hist2[i])*(hist1[i]-hist2[i]) * 1.0 / (hist1[i]+hist2[i]);
+    }
+    return s;
+  }else if(mode==BHATTACHARYYA){
+    float s = 0.;
+    for(int i = 0; i < size; i++){
+      s += std::sqrt(hist1[i]*hist2[i]);
+    }
+    return std::sqrt(1 - s / std::sqrt(avg1*avg2*size*size));
+  }else{
+    return 0.;
+  }
 }
 
 std::vector<float> DistanceMapMatcher::normalize(const std::vector<float>&featureVec){
@@ -404,4 +507,21 @@ bool DistanceMapMatcher::filterMinMaxAlphaDistMap(std::vector<MinMaxAlphaDist>& 
         return getfilteredMap;
     }
     return false;
+}
+
+void DistanceMapMatcher::splitString(const std::string& s, std::vector<std::string>& v, const std::string& c)
+{
+    using namespace std;
+    string::size_type pos1, pos2;
+    pos2 = s.find(c);
+    pos1 = 0;
+    while(string::npos != pos2)
+    {
+        v.push_back(s.substr(pos1, pos2-pos1));
+
+        pos1 = pos2 + c.size();
+        pos2 = s.find(c, pos1);
+    }
+    if(pos1 != s.length())
+        v.push_back(s.substr(pos1));
 }

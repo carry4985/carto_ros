@@ -25,11 +25,14 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include "node_constants.h"
 
+#include "distance_map.h"
+#include "distance_map_matcher.h"
+
 DEFINE_string(pb_higher_res, "",
               "Filename of a high resolution pbstream to load.");
 DEFINE_string(pb_lower_res, "",
               "Filename of a lower resolution pbstream to load.");
-
+DEFINE_string(map_dir,"/home/wz/ROS/carto_ws/bag_map_pb/map", "dir where save map.pgm and map.yaml.");
 namespace cartographer_ros {
 namespace {
 
@@ -47,7 +50,9 @@ void trans_tf(const GlobalLocator::GlobalPose2D&pose,
     transform.transform.rotation.z = q.z();
     transform.transform.rotation.w = q.w();
 }
+
 void Run(const std::shared_ptr<GlobalLocator>& locator) {
+  locator->loadHistMap("/home/wz/ROS/carto_ws/bag_map_pb/map/hist.txt");
   ::ros::NodeHandle nh;
   ::ros::Subscriber laser_scan_subscriber;
 
@@ -64,8 +69,8 @@ void Run(const std::shared_ptr<GlobalLocator>& locator) {
               float timeuse;
               gettimeofday(&tpstart,NULL);
 
-              if(locator->match(msg, tmpRes)){
-                  LOG(INFO)<<"Matched location is (<<"<<tmpRes.x<<","<<tmpRes.x<<","<<tmpRes.theta<<")";
+              if(locator->matchWithHistmap(msg, tmpRes)){
+                  LOG(INFO)<<"Matched location is (<<"<<tmpRes.x<<","<<tmpRes.y<<","<<tmpRes.theta<<")";
                   kLocated = true;
                   msgToMatch = *msg;
               }
@@ -100,6 +105,45 @@ void Run(const std::shared_ptr<GlobalLocator>& locator) {
   }
 }
 
+void testDistanceMap(std::string yamldir){
+//    DistanceMap distmap(yamldir);
+//    distmap.computeHistgramForMap();
+    ::ros::NodeHandle nh;
+    ::ros::Subscriber laser_scan_subscriber;
+    bool kLocated = false;
+    constexpr int localInfiniteSubscriberQueueSize = 1;
+    DistanceMapMatcher distmap_matcher;
+//    distmap_matcher.loadDistanceMapData("/home/wz/ROS/carto_ws/bag_map_pb/map/DistMaps.txt",
+//                                        "/home/wz/ROS/carto_ws/bag_map_pb/map/IdxOfMinDist.txt");
+    distmap_matcher.loadHistgramMapData("/home/wz/ROS/carto_ws/bag_map_pb/map/hist.txt");
+    laser_scan_subscriber = nh.subscribe(
+            kLaserScanTopic, localInfiniteSubscriberQueueSize,
+            boost::function<void(const sensor_msgs::LaserScan::ConstPtr&)>(
+            [&](const sensor_msgs::LaserScan::ConstPtr& msg){
+                struct timeval tpstart,tpend;
+                float timeuse;
+                gettimeofday(&tpstart,NULL);
+
+                cv::Mat m = distmap_matcher.getCandidates("/home/wz/ROS/carto_ws/bag_map_pb/map/map.pgm",msg);
+                gettimeofday(&tpend,NULL);
+                timeuse=(1000000*(tpend.tv_sec-tpstart.tv_sec) + tpend.tv_usec-tpstart.tv_usec)/1000000.0;
+                LOG(INFO) << "All Use time:" << timeuse;
+
+                 cv::imwrite("/home/wz/test.jpg", m);
+                 kLocated = true;
+                 LOG(INFO)<<"ok!";
+            })
+    );
+
+    while(::ros::ok()){
+      ::ros::spinOnce();
+      if(kLocated){
+        laser_scan_subscriber.shutdown();
+        break;
+      }
+    }
+}
+
 }  // namespace
 }  // namespace cartographer_ros
 
@@ -116,7 +160,10 @@ int main(int argc, char** argv) {
       locator = std::make_shared<GlobalLocator>(FLAGS_pb_higher_res,FLAGS_pb_lower_res);
   } else {
     locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
+
   }
   ::cartographer_ros::Run(locator);
+//  ::cartographer_ros::testDistanceMap(FLAGS_map_dir);
+
   ::ros::shutdown();
 }

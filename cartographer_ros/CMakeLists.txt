@@ -36,6 +36,7 @@ set(PACKAGE_DEPENDENCIES
 )
 
 find_package(cartographer REQUIRED)
+find_package (OpenCV REQUIRED)
 include("${CARTOGRAPHER_CMAKE_DIR}/functions.cmake")
 set(BUILD_SHARED_LIBS OFF)
 option(BUILD_GRPC "build features that require Cartographer gRPC support" false)
@@ -97,6 +98,8 @@ add_library(${PROJECT_NAME} ${ALL_SRCS})
 add_subdirectory("cartographer_ros")
 
 target_link_libraries(${PROJECT_NAME} PUBLIC cartographer)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC ${OpenCV_LIBS})
 
 # Lua
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${LUA_INCLUDE_DIR})

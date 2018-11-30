@@ -27,7 +27,7 @@
     <node name="cartographer_global_localization" pkg="cartographer_ros"
         type="cartographer_global_localization" args="
              -pb_higher_res $(arg pb_higher_res)
-             -pb_lower_res $(arg pb_lower_res)" />
+             " />
     <remap from="scan" to="/scan" />
   </group>
 

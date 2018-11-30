@@ -9,6 +9,7 @@
 #include "cartographer/mapping/internal/2d/scan_matching/fast_correlative_scan_matcher_2d.h"
 #include "cartographer/mapping/proto/scan_matching/fast_correlative_scan_matcher_options_2d.pb.h"
 
+#include "distance_map_matcher.h"
 
 class GlobalLocator {
 public:
@@ -43,19 +44,24 @@ public:
 
   bool match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
   bool match(const sensor_msgs::MultiEchoLaserScan::ConstPtr &msg, GlobalPose2D &res);
+
+  //temp interface, for experiment.
+  void loadHistMap(const std::string& hist_file_path);
+  bool matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
 private:
-  void load_submaps(const std::string& pbfilepath,
+  void loadSubmaps(const std::string& pbfilepath,
                     std::vector<std::shared_ptr<SubmapScanMatcher>>& matcher_vec_ptr);
 
   //just for experiment.remove if not need any more.
-  void write_submaps(const std::vector<int>& index);
+  void writeSubmaps(const std::vector<int>& index);
 
-  std::vector<int> get_submap_candidates(const cartographer::transform::Rigid2d& pose_in_lower_res_map);
+  std::vector<int> getSubmapCandidates(const cartographer::transform::Rigid2d& pose_in_lower_res_map);
+  int getNearestSubmap(const cartographer::transform::Rigid2d& pose_in_histmap);
+
   double distance(const cartographer::transform::Rigid2d& pose1,
                   const cartographer::transform::Rigid2d& pose2);
   ::cartographer::mapping::scan_matching::proto::FastCorrelativeScanMatcherOptions2D
-  load_options(const std::string cfg_file_dir,const std::string cfg_file_name);
-
+  loadOptions(const std::string cfg_file_dir,const std::string cfg_file_name);
 
   bool _inited = false;
   bool _two_stage_mode = false;
@@ -71,6 +77,8 @@ private:
 
   std::vector<std::shared_ptr<SubmapScanMatcher>> _submap_scan_matchers_higher;
   std::vector<std::shared_ptr<SubmapScanMatcher>> _submap_scan_matchers_lower;
+
+  DistanceMapMatcher _hist_matcher;
 };
 
 #endif // GLOBAL_LOCATOR_H
