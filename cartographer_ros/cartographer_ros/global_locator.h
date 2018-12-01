@@ -38,7 +38,7 @@ public:
   ////locate using single resolution.
   GlobalLocator(const std::string& pbfilepath);
 
-  ////locate using high and low resolution maps.
+  ////locate using high and low resolution maps. not need any more...
   GlobalLocator(const std::string& high_resolution_pbfilepath,
                 const std::string& low_resolution_pbfilepath);
 

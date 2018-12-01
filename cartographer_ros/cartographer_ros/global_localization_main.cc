@@ -16,6 +16,8 @@
 
 #include <map>
 #include <string>
+#include <fstream>
+
 #include "global_locator.h"
 
 #include "gflags/gflags.h"
@@ -28,11 +30,19 @@
 #include "distance_map.h"
 #include "distance_map_matcher.h"
 
+#include "rosbag/bag.h"
+#include "rosbag/view.h"
+#include "sensor_msgs/LaserScan.h"
+
+#include "time_conversion.h"
+
 DEFINE_string(pb_higher_res, "",
               "Filename of a high resolution pbstream to load.");
 DEFINE_string(pb_lower_res, "",
               "Filename of a lower resolution pbstream to load.");
 DEFINE_string(map_dir,"/home/wz/ROS/carto_ws/bag_map_pb/map", "dir where save map.pgm and map.yaml.");
+
+DEFINE_string(bag_filename,"", "rosbag to play.");
 namespace cartographer_ros {
 namespace {
 
@@ -52,7 +62,7 @@ void trans_tf(const GlobalLocator::GlobalPose2D&pose,
 }
 
 void Run(const std::shared_ptr<GlobalLocator>& locator) {
-  locator->loadHistMap("/home/wz/ROS/carto_ws/bag_map_pb/map/hist.txt");
+  //locator->loadHistMap("/home/wz/ROS/carto_ws/bag_map_pb/map/hist.txt");
   ::ros::NodeHandle nh;
   ::ros::Subscriber laser_scan_subscriber;
 
@@ -69,7 +79,8 @@ void Run(const std::shared_ptr<GlobalLocator>& locator) {
               float timeuse;
               gettimeofday(&tpstart,NULL);
 
-              if(locator->matchWithHistmap(msg, tmpRes)){
+//              if(locator->matchWithHistmap(msg, tmpRes)){
+              if(locator->match(msg, tmpRes)){
                   LOG(INFO)<<"Matched location is (<<"<<tmpRes.x<<","<<tmpRes.y<<","<<tmpRes.theta<<")";
                   kLocated = true;
                   msgToMatch = *msg;
@@ -144,6 +155,62 @@ void testDistanceMap(std::string yamldir){
     }
 }
 
+
+//match with sampled scans along the trajectory. write results for paper.
+void matchAllScans(const std::shared_ptr<GlobalLocator>& locator){
+    locator->loadHistMap("/home/wz/ROS/carto_ws/bag_map_pb/map/hist.txt");
+    rosbag::Bag bag;
+    bag.open(FLAGS_bag_filename);
+    std::ofstream ofs("match_result_stats.txt");
+    if(!ofs){
+      LOG(ERROR)<<"open stats file failed!";
+      return;
+    }
+
+    const int kSkipSecs = 5;//match every 10s.
+    int64 secs = 0;
+    GlobalLocator::GlobalPose2D pyramid_res, histgram_res;
+    struct timeval tpstart,tpend;
+    float timeuse_pyramid, timeuse_histgram;
+    for(rosbag::MessageInstance const msg: rosbag::View(bag)){
+      const sensor_msgs::LaserScan::ConstPtr scan = msg.instantiate<sensor_msgs::LaserScan>();
+      if (scan != NULL){
+          auto timestamp_ros = scan->header.stamp;
+          const int64 timestamp_carto =
+              cartographer::common::ToUniversal(FromRos(timestamp_ros));
+
+          if(secs==0){
+            secs = timestamp_ros.sec;
+          }
+          if(secs + kSkipSecs > timestamp_ros.sec){
+            continue;
+          }else{
+            secs = timestamp_ros.sec;
+          }
+          //mode 0, use multi resolution map.
+          gettimeofday(&tpstart,NULL);
+          bool is_ok_pyramid = locator->match(scan, pyramid_res);
+          gettimeofday(&tpend,NULL);
+          timeuse_pyramid=(1000000*(tpend.tv_sec-tpstart.tv_sec) + tpend.tv_usec-tpstart.tv_usec)/1000000.0;
+
+          //mode 1, use histgram map.
+          gettimeofday(&tpstart,NULL);
+          bool is_ok_histgram = locator->matchWithHistmap(scan, histgram_res);
+          gettimeofday(&tpend,NULL);
+          timeuse_histgram=(1000000*(tpend.tv_sec-tpstart.tv_sec) + tpend.tv_usec-tpstart.tv_usec)/1000000.0;
+
+          if(is_ok_histgram && is_ok_pyramid){
+            ofs<<timestamp_carto<<","<<timestamp_ros<<","<<
+                 pyramid_res.x<<","<<pyramid_res.y<<","<<pyramid_res.theta<<","<<timeuse_pyramid<<","<<
+                 histgram_res.x<<","<<histgram_res.y<<","<<histgram_res.theta<<","<<timeuse_histgram<<"\n";
+            LOG(INFO)<<"Scan with time stamp "<<timestamp_ros<<" matched successfully!";
+          }
+      }
+    }
+    ofs.close();
+    bag.close();
+}
+
 }  // namespace
 }  // namespace cartographer_ros
 
@@ -160,9 +227,10 @@ int main(int argc, char** argv) {
       locator = std::make_shared<GlobalLocator>(FLAGS_pb_higher_res,FLAGS_pb_lower_res);
   } else {
     locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
-
   }
-  ::cartographer_ros::Run(locator);
+  ::cartographer_ros::matchAllScans(locator);
+
+//  ::cartographer_ros::Run(locator);
 //  ::cartographer_ros::testDistanceMap(FLAGS_map_dir);
 
   ::ros::shutdown();

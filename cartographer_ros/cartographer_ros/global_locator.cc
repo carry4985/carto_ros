@@ -48,7 +48,7 @@ void GlobalLocator::loadSubmaps(const std::string& pbfilepath,
   ::cartographer::mapping::scan_matching::proto::FastCorrelativeScanMatcherOptions2D options;
   options.set_linear_search_window(7);
   options.set_angular_search_window(30.*3.1415926 / 180.);
-  options.set_branch_and_bound_depth(7);
+  options.set_branch_and_bound_depth(7);//important, this para decides the runing time.
 
   LOG(INFO) << "Loading submap from serialized data.";
   ::cartographer::mapping::proto::SerializedData proto;
@@ -110,7 +110,7 @@ bool GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
                                                      &score_tmp, &pose_estimate_tmp))
          continue;
      else{
-       LOG(INFO)<<score_tmp;
+//       LOG(INFO)<<score_tmp;
        if(score_tmp > score){
          score = score_tmp;
          pose_estimate = pose_estimate_tmp;
@@ -119,6 +119,8 @@ bool GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
 
      if(score>=_score_thresh_higher) break;
    }
+
+//   writeSubmaps(matched_ids);
 
    //whatever, return the final matched pose.
    res.x = pose_estimate.translation().coeff(0,0);;
@@ -179,7 +181,7 @@ bool GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
           score_tmp = 0.0; //reset score and score_tmp.
           score = 0.0;
           std::vector<int> index_vec = getSubmapCandidates(pose_estimate);
-          writeSubmaps(index_vec);//for debugging.
+//          writeSubmaps(index_vec);//for debugging.
           LOG(INFO)<<"filtered submaps' size is "<<index_vec.size();
           gettimeofday(&tpstart,NULL);
           for(const int& ind: index_vec){

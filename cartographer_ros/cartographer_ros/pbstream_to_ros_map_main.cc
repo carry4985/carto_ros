@@ -31,6 +31,8 @@
 #include "cartographer_ros/submap.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "time_conversion.h"
+#include <fstream>
 
 DEFINE_string(pbstream_filename, "",
               "Filename of a pbstream to draw a map from.");
@@ -44,6 +46,14 @@ void Run(const std::string& pbstream_filename, const std::string& map_filestem,
          const double resolution) {
   ::cartographer::io::ProtoStreamReader reader(pbstream_filename);
   ::cartographer::io::ProtoStreamDeserializer deserializer(&reader);
+
+  std::ofstream ofs("nodes_info.txt");
+  if(!ofs){
+     LOG(ERROR)<<"Open node info output file failed!";
+     return;
+  }
+  ofs<<"Timestamp in cartographer,\t Timestamp in ROS,\t Node's global 2d pose\n";
+
 
   const auto& pose_graph = deserializer.pose_graph();
 
@@ -63,13 +73,49 @@ void Run(const std::string& pbstream_filename, const std::string& map_filestem,
                   .submap(id.submap_index)
                   .pose());
 
-//      ::cartographer::mapping::Submap2D submap2d(submap.submap_2d());
-//      local_pose = submap2d.local_pose();
+//      const auto trans = pose_graph.trajectory(id.trajectory_id)
+//          .submap(id.submap_index)
+//          .pose();
+//      double x = trans.rotation().x();
+//      double y = trans.rotation().y();
+//      double z = trans.rotation().z();
+//      double w = trans.rotation().w();
+//      LOG(INFO)<<"rotation quaterniond "<<x<<","<<y<<","<<z<<","<<w;
+//      const auto submap_global_pose_2d =
+//              ::cartographer::transform::Project2D(global_submap_pose);
+//      const auto& x = submap_global_pose_2d.translation().coeff(0,0);;
+//      const auto& y = submap_global_pose_2d.translation().coeff(1,0);
+//      double theta = submap_global_pose_2d.rotation().angle();
+//      LOG(INFO)<<"The submap pose 2d: ("<<x<<","<<y<<","<<theta<<")";
 
       FillSubmapSlice(global_submap_pose, submap, &submap_slices[id]);
     }
+    if(proto.has_node()){//add by wz,for test.
+      const auto& node = proto.node();
+
+      const auto& trajectory_id = node.node_id().trajectory_id();
+      const auto& node_index = node.node_id().node_index();
+
+      const auto node_global_pose = ::cartographer::transform::ToRigid3(
+            pose_graph.trajectory(trajectory_id)
+                .node(node_index)
+                .pose());
+      const auto node_global_pose_2d =
+              ::cartographer::transform::Project2D(node_global_pose);
+      const auto& timestamp = pose_graph.trajectory(trajectory_id)
+                              .node(node_index)
+                              .timestamp();
+      const auto& x = node_global_pose_2d.translation().coeff(0,0);;
+      const auto& y = node_global_pose_2d.translation().coeff(1,0);
+      double theta = node_global_pose_2d.rotation().angle();
+      const auto& time_in_ros = ToRos(::cartographer::common::FromUniversal(timestamp));
+      LOG(INFO)<<"The node's time stamp in ros:"<<time_in_ros<<", pose: ("<<x<<","<<y<<","<<theta<<").";
+
+      ofs<<timestamp<<","<<time_in_ros<<","<<x<<","<<y<<","<<theta<<"\n";
+    }
   }
   CHECK(reader.eof());
+  ofs.close();
 
   LOG(INFO) << "Generating combined map image from submap slices.";
   auto result =
