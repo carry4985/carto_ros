@@ -253,6 +253,58 @@ void matchAllScans(const std::shared_ptr<GlobalLocator>& locator){
     bag.close();
 }
 
+//only match with scans whose timestamp in fitered_match_res_table.txt.
+//just for writing paper. remove it if not need any more.
+void matchAllScansLowerResolution(const std::shared_ptr<GlobalLocator>& locator){
+    std::vector<std::vector<std::string>> grd_truth_info;
+    readGroundTruthInfo("/home/wz/Desktop/fitered_match_res_table.txt",grd_truth_info);
+
+    rosbag::Bag bag;
+    bag.open(FLAGS_bag_filename);
+    std::ofstream ofs("match_result_stats_lower.txt");
+    if(!ofs){
+      LOG(ERROR)<<"open stats file failed!";
+      return;
+    }
+
+    int64 min_secs = 99999;
+    GlobalLocator::GlobalPose2D res;
+    struct timeval tpstart,tpend;
+    float timeuse;
+
+    for(int i = 0; i<grd_truth_info.size();i++){
+      sensor_msgs::LaserScan::ConstPtr nearest_scan;
+      //found nearest message by time stamp.
+      for(rosbag::MessageInstance const msg: rosbag::View(bag)){
+        const sensor_msgs::LaserScan::ConstPtr scan = msg.instantiate<sensor_msgs::LaserScan>();
+        if (scan != NULL){
+            auto timestamp_ros = scan->header.stamp;
+            int64 timestamp_carto = cartographer::common::ToUniversal(FromRos(timestamp_ros));
+
+            if(abs(timestamp_carto - atoi(grd_truth_info[i][0].c_str())) < min_secs){
+              min_secs = abs(timestamp_carto - atoi(grd_truth_info[i][0].c_str()));
+              nearest_scan = msg.instantiate<sensor_msgs::LaserScan>();
+           }
+        }
+      }
+      min_secs = 99999;//reset.
+
+      //mode 0, use lower resolution map.
+      gettimeofday(&tpstart, NULL);
+      locator->match(nearest_scan, res);
+      gettimeofday(&tpend, NULL);
+      timeuse=(1000000*(tpend.tv_sec-tpstart.tv_sec) + tpend.tv_usec-tpstart.tv_usec)/1000000.0;
+
+      ofs<<grd_truth_info[i][0]<<","<<grd_truth_info[i][1]<<","
+           <<grd_truth_info[i][2]<<","<<grd_truth_info[i][3]<<","
+           <<grd_truth_info[i][4]<<","<<
+           res.x<<","<<res.y<<","<<res.theta<<","<<res.prob<<","<<timeuse<<",\n";
+      LOG(INFO)<<i<<", Scan with time stamp "<<grd_truth_info[i][1]<<" matched successfully!";
+    }
+    ofs.close();
+    bag.close();
+}
+
 void showSelectedPoints(){
   ros::NodeHandle n;
   ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 10);
@@ -314,18 +366,19 @@ int main(int argc, char** argv) {
   ::ros::init(argc, argv, "cartographer_global_localization");
   ::ros::start();
 
-//  std::shared_ptr<GlobalLocator> locator;
-//  if(!FLAGS_pb_lower_res.empty()){
-//      locator = std::make_shared<GlobalLocator>(FLAGS_pb_higher_res,FLAGS_pb_lower_res);
-//  } else {
-//    locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
-//  }
+  std::shared_ptr<GlobalLocator> locator;
+  if(!FLAGS_pb_lower_res.empty()){
+      locator = std::make_shared<GlobalLocator>(FLAGS_pb_higher_res,FLAGS_pb_lower_res);
+  } else {
+    locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
+  }
 //  ::cartographer_ros::matchAllScans(locator);
+  ::cartographer_ros::matchAllScansLowerResolution(locator);
 
 //  ::cartographer_ros::Run(locator);
 //  ::cartographer_ros::testDistanceMap(FLAGS_map_dir);
 
-    ::cartographer_ros::showSelectedPoints();
+//    ::cartographer_ros::showSelectedPoints();
 
   ::ros::shutdown();
 }
