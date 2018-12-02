@@ -88,7 +88,7 @@ void GlobalLocator::loadHistMap(const std::string &hist_file_path){
    _hist_matcher.loadHistgramMapData(hist_file_path);
 }
 
-bool GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res){
+void GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res){
    std::vector<cv::Point2f> pts = _hist_matcher.getCandidates(msg, 20);
    float score_tmp = 0.f, score = 0.f;
    constexpr float kMinScore = 0.1f;
@@ -96,7 +96,10 @@ bool GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
    cartographer::transform::Rigid2d pose_estimate = cartographer::transform::Rigid2d::Identity();
    cartographer::sensor::PointCloud point_cloud = cartographer_ros::ToPointCloud((*msg));
 
-   if(_submap_scan_matchers_higher.empty())return false;
+   if(_submap_scan_matchers_higher.empty()){
+     LOG(ERROR)<<"Map pyramid is empty!";
+     return;
+   }
    std::vector<int> matched_ids;
    for(const auto& pt: pts){
      const ::cartographer::transform::Rigid2d carto_pt =
@@ -126,11 +129,11 @@ bool GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
    res.x = pose_estimate.translation().coeff(0,0);;
    res.y = pose_estimate.translation().coeff(1,0);
    res.theta = pose_estimate.rotation().angle();
-   return true;
+   res.prob = score;
 }
 
 //todo:find out why the matched result at timestamp of 700s worse than realtime mapping.
-bool GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res){
+void GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res){
   float score_tmp = 0.f, score = 0.f;
   constexpr float kMinScore = 0.1f;
   cartographer::transform::Rigid2d pose_estimate_tmp = cartographer::transform::Rigid2d::Identity();
@@ -151,12 +154,11 @@ bool GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
           }
         }
       }
-      if(score>=_score_thresh_higher){
-        res.x = pose_estimate.translation().coeff(0,0);;
-        res.y = pose_estimate.translation().coeff(1,0);
-        res.theta = pose_estimate.rotation().angle();
-        return true;
-      }
+      res.x = pose_estimate.translation().coeff(0,0);;
+      res.y = pose_estimate.translation().coeff(1,0);
+      res.theta = pose_estimate.rotation().angle();
+      res.prob = score;
+      return;
   } else {
       struct timeval tpstart,tpend;
       float timeuse;
@@ -198,26 +200,22 @@ bool GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
           gettimeofday(&tpend,NULL);
           timeuse=(1000000*(tpend.tv_sec-tpstart.tv_sec) + tpend.tv_usec-tpstart.tv_usec)/1000000.0;
           LOG(INFO)<<"Higher resolution submap matching used "<<timeuse<<"s.";
-          if(score>_score_thresh_higher){
-              res.x = pose_estimate.translation().coeff(0,0);;
-              res.y = pose_estimate.translation().coeff(1,0);
-              res.theta = pose_estimate.rotation().angle();
-              return true;
-          }else{
-              return false;
-          }
+          res.x = pose_estimate.translation().coeff(0,0);;
+          res.y = pose_estimate.translation().coeff(1,0);
+          res.theta = pose_estimate.rotation().angle();
+          res.prob = score;
+          return;
       }
       else{
-          return false;
+          return;
       }
   }
-  return false;
 }
 
-bool GlobalLocator::match(const sensor_msgs::MultiEchoLaserScan::ConstPtr &msg, GlobalPose2D &res){
+void GlobalLocator::match(const sensor_msgs::MultiEchoLaserScan::ConstPtr &msg, GlobalPose2D &res){
   //todo,wz. align MultiEchoLaserScan with imu first then call scanmatcher's match function.
   LOG(ERROR)<<"Not implemented yet!";
-  return false;
+  return;
 }
 
 ::cartographer::mapping::scan_matching::proto::FastCorrelativeScanMatcherOptions2D

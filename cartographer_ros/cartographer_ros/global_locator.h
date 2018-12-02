@@ -16,6 +16,7 @@ public:
   struct GlobalPose2D {
       double x, y;
       double theta;
+      float prob = 0.0;
   };
   struct SubmapScanMatcher{
   public:
@@ -42,12 +43,12 @@ public:
   GlobalLocator(const std::string& high_resolution_pbfilepath,
                 const std::string& low_resolution_pbfilepath);
 
-  bool match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
-  bool match(const sensor_msgs::MultiEchoLaserScan::ConstPtr &msg, GlobalPose2D &res);
+  void match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
+  void match(const sensor_msgs::MultiEchoLaserScan::ConstPtr &msg, GlobalPose2D &res);
 
   //temp interface, for experiment.
   void loadHistMap(const std::string& hist_file_path);
-  bool matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
+  void matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPose2D &res);
 private:
   void loadSubmaps(const std::string& pbfilepath,
                     std::vector<std::shared_ptr<SubmapScanMatcher>>& matcher_vec_ptr);

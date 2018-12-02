@@ -26,11 +26,10 @@
 
     <node name="cartographer_global_localization" pkg="cartographer_ros"
         type="cartographer_global_localization" args="
-             -pb_higher_res $(arg pb_higher_res)
-             " />
+             -pb_higher_res $(arg pb_higher_res)"/>
     <remap from="scan" to="/scan" />
   </group>
 
-  <node name="playbag" pkg="rosbag" type="play"
-      args="$(arg bag_filename) -s $(arg begin_timestamp)" />
+  <!--node name="playbag" pkg="rosbag" type="play"
+      args="$(arg bag_filename) -s $(arg begin_timestamp)" /-->
 </launch>
