@@ -372,13 +372,14 @@ int main(int argc, char** argv) {
   } else {
     locator =std::make_shared<GlobalLocator>(FLAGS_pb_higher_res);
   }
-//  ::cartographer_ros::matchAllScans(locator);
-  ::cartographer_ros::matchAllScansLowerResolution(locator);
 
-//  ::cartographer_ros::Run(locator);
-//  ::cartographer_ros::testDistanceMap(FLAGS_map_dir);
 
-//    ::cartographer_ros::showSelectedPoints();
+  ::cartographer_ros::Run(locator);
+  // for test or master's degree paper
+  //  ::cartographer_ros::testDistanceMap(FLAGS_map_dir);
+  //  ::cartographer_ros::matchAllScans(locator);
+  //  ::cartographer_ros::matchAllScansLowerResolution(locator);
+  //  ::cartographer_ros::showSelectedPoints();
 
   ::ros::shutdown();
 }

@@ -23,16 +23,22 @@ public:
       SubmapScanMatcher() = delete;
       SubmapScanMatcher(std::shared_ptr<::cartographer::mapping::scan_matching
                         ::FastCorrelativeScanMatcher2D> scan_matcher_ptr,
-                        ::cartographer::transform::Rigid2d origin,
+                        ::cartographer::transform::Rigid2d global_pose,
+                        ::cartographer::transform::Rigid2d local_pose,
                         ::cartographer::transform::Rigid2d center){
           _scan_matcher_ptr = scan_matcher_ptr;
-          _origin = origin;
+          _submap_global_pose = global_pose;
+          _submap_local_pose = local_pose;
           _center = center;
+          _local_to_global = global_pose*local_pose.inverse();
       }
       std::shared_ptr<::cartographer::mapping::scan_matching
                       ::FastCorrelativeScanMatcher2D> _scan_matcher_ptr;
-      ::cartographer::transform::Rigid2d _origin;
+//      ::cartographer::transform::Rigid2d _origin;//not need, remove it.
       ::cartographer::transform::Rigid2d _center;
+      ::cartographer::transform::Rigid2d _submap_local_pose;
+      ::cartographer::transform::Rigid2d _submap_global_pose;
+      ::cartographer::transform::Rigid2d _local_to_global;
   };
 
   GlobalLocator() = delete;

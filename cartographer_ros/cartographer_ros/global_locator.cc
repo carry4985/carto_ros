@@ -67,16 +67,22 @@ void GlobalLocator::loadSubmaps(const std::string& pbfilepath,
                   .pose());
       const auto global_submap_pose2d =
               ::cartographer::transform::Project2D(global_submap_pose3d);
-      ::cartographer::mapping::Submap2D submap(submap_proto.submap_2d());
+      const auto local_submap_pose2d =
+              ::cartographer::transform::Project2D(
+              ::cartographer::transform::ToRigid3(submap_proto.submap_2d().local_pose()));
 
+      ::cartographer::mapping::Submap2D submap(submap_proto.submap_2d());
       auto max_coordinate = submap.grid()->limits().max();
       const ::cartographer::transform::Rigid2d center =
-              ::cartographer::transform::Rigid2d::Translation(::cartographer::transform::Rigid2d::Vector((max_coordinate.x()+global_submap_pose2d.translation().coeff(0,0)) / 2,
+              ::cartographer::transform::Rigid2d::Translation(::cartographer::transform::Rigid2d::Vector(
+                                                 (max_coordinate.x()+global_submap_pose2d.translation().coeff(0,0)) / 2,
                                                  (max_coordinate.y()+global_submap_pose2d.translation().coeff(1,0)) / 2));
       std::shared_ptr<::cartographer::mapping::scan_matching::FastCorrelativeScanMatcher2D>
               scanmatcher=std::make_shared<::cartographer::mapping::scan_matching::FastCorrelativeScanMatcher2D>(*(submap.grid()),options);
 
-      std::shared_ptr<SubmapScanMatcher> submap_scan_matcher = std::make_shared<SubmapScanMatcher>(scanmatcher, global_submap_pose2d, center);
+      std::shared_ptr<SubmapScanMatcher> submap_scan_matcher
+          = std::make_shared<SubmapScanMatcher>(scanmatcher,
+                                                global_submap_pose2d, local_submap_pose2d, center);
       matcher_ptr.emplace_back(submap_scan_matcher);
     }
   }
@@ -105,7 +111,7 @@ void GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
      const ::cartographer::transform::Rigid2d carto_pt =
              ::cartographer::transform::Rigid2d::Translation(::cartographer::transform::Rigid2d::Vector(pt.x, pt.y));
      int index = getNearestSubmap(carto_pt);
-     if(std::find(matched_ids.begin(),matched_ids.end(),index)!=matched_ids.end()){
+     if(std::find(matched_ids.begin(), matched_ids.end(),index) != matched_ids.end()){
        continue;
      }
      matched_ids.push_back(index);
@@ -116,7 +122,7 @@ void GlobalLocator::matchWithHistmap(const sensor_msgs::LaserScan::ConstPtr &msg
 //       LOG(INFO)<<score_tmp;
        if(score_tmp > score){
          score = score_tmp;
-         pose_estimate = pose_estimate_tmp;
+         pose_estimate = _submap_scan_matchers_higher[index]->_local_to_global*pose_estimate_tmp;
        }
      }
 
@@ -148,13 +154,13 @@ void GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
         else{
           if(score_tmp > score){
             score = score_tmp;
-            //pose_estimate = matcher->_origin * pose_estimate_tmp;
-            //really confused me! maybe the grid's maplimits has encoded the submap's global pose.
-            pose_estimate = pose_estimate_tmp;
+            //The grid's maplimits has encoded the submap's local pose, we should transform
+            //coordinate from local frame to global frame.
+            pose_estimate = matcher->_local_to_global*pose_estimate_tmp;
           }
         }
       }
-      res.x = pose_estimate.translation().coeff(0,0);;
+      res.x = pose_estimate.translation().coeff(0,0);
       res.y = pose_estimate.translation().coeff(1,0);
       res.theta = pose_estimate.rotation().angle();
       res.prob = score;
@@ -171,7 +177,7 @@ void GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
         else{
           if(score_tmp > score){
             score = score_tmp;
-            pose_estimate = pose_estimate_tmp;
+            pose_estimate = matcher->_local_to_global*pose_estimate_tmp;
           }
         }
       }
@@ -193,7 +199,7 @@ void GlobalLocator::match(const sensor_msgs::LaserScan::ConstPtr &msg, GlobalPos
             else{
               if(score_tmp > score){
                 score = score_tmp;
-                pose_estimate = pose_estimate_tmp;
+                pose_estimate = _submap_scan_matchers_higher[ind]->_local_to_global*pose_estimate_tmp;
               }
             }
           }
